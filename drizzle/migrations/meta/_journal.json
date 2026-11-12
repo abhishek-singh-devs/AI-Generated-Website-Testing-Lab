@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1794521351298,
+      "tag": "0000_create_testing_lab_schema",
+      "breakpoints": true
+    }
+  ]
+}
