@@ -29,6 +29,13 @@ describe("URL validation", () => {
     expect(validateUrl("https://user:pass@example.com").ok).toBe(false);
   });
 
+  it("rejects shared, reserved, multicast, and mapped private addresses", () => {
+    for (const host of ["100.64.0.1", "192.0.2.1", "198.18.0.1", "198.51.100.2", "203.0.113.9", "224.0.0.1", "240.0.0.1", "fc00::1", "fe80::1", "ff02::1", "::ffff:127.0.0.1", "::ffff:7f00:1"]) {
+      expect(isPrivateHost(host)).toBe(true);
+    }
+    expect(validateUrl("http://[::ffff:127.0.0.1]").ok).toBe(false);
+  });
+
   it("rejects local and private hosts", () => {
     for (const host of ["localhost", "service.local", "10.0.0.1", "127.0.0.1", "192.168.1.2", "172.16.0.1", "169.254.1.1", "::1"]) {
       expect(isPrivateHost(host)).toBe(true);

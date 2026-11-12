@@ -9,9 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader, Panel, PanelHeader } from "@/components/lab/common";
-import { suitesQuery, createSuite, updateSuite, deleteSuite, keys } from "@/lib/lab-data";
+import { suitesQuery, runsQuery, createSuite, updateSuite, deleteSuite, keys } from "@/lib/lab-data";
+import { validateUrl } from "@/lib/testing/url";
+import { StatusBadge } from "@/components/lab/status";
 import { BROWSERS, DEVICES, PROFILES } from "@/lib/testing/constants";
-import type { TestProfile, BrowserId, DeviceId, TestSuiteRow } from "@/lib/testing/types";
+import type { TestProfile, BrowserId, DeviceId, TestSuiteRow, TestRunRow } from "@/lib/testing/types";
 
 export const Route = createFileRoute("/_authenticated/suites")({
   head: () => ({ meta: [{ title: "Test Suites — AI Website Testing Lab" }, { name: "description", content: "Manage reusable website QA test configurations." }] }),
@@ -22,9 +24,15 @@ type Draft = { name: string; description: string; target_url: string; profile: T
 const blank: Draft = { name: "", description: "", target_url: "", profile: "comprehensive", browser: "chromium", device: "desktop", schedule: "manual", enabled: true };
 const toDraft = (s: TestSuiteRow): Draft => ({ name: s.name, description: s.description ?? "", target_url: s.target_url, profile: s.profile, browser: s.browsers[0] ?? "chromium", device: s.devices[0] ?? "desktop", schedule: s.schedule, enabled: s.enabled });
 
+function suiteStats(suiteId: string, runs: TestRunRow[] | undefined) {
+  const linked = (runs ?? []).filter((run) => run.suite_id === suiteId);
+  return { count: linked.length, latestStatus: linked[0]?.status ?? null };
+}
+
 function SuitesPage() {
   const qc = useQueryClient();
   const suites = useQuery(suitesQuery);
+  const runs = useQuery(runsQuery);
   const [draft, setDraft] = useState<Draft>(blank);
   const [editing, setEditing] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -35,8 +43,23 @@ function SuitesPage() {
   const update = useMutation({ mutationFn: ({ id, d }: { id: string; d: Draft }) => updateSuite(id, { ...d, description: d.description.trim() || null, browsers: [d.browser], devices: [d.device] }), onSuccess: async () => { await refresh(); toast.success("Suite updated"); closeForm(); }, onError: (e) => toast.error("Couldn't update suite", { description: e.message }) });
   const remove = useMutation({ mutationFn: deleteSuite, onSuccess: async () => { await refresh(); toast.success("Suite deleted"); }, onError: (e) => toast.error("Couldn't delete suite", { description: e.message }) });
   const openNew = () => { setDraft(blank); setEditing(null); setFormOpen(true); };
-  const submit = (e: FormEvent) => { e.preventDefault(); if (!draft.name.trim() || !draft.target_url.trim()) { toast.error("Suite name and target URL are required"); return; } if (editing) update.mutate({ id: editing, d: draft }); else create.mutate(draft); };
-  const filtered = (suites.data ?? []).filter(s => [s.name, s.description ?? "", s.target_url].some(v => v.toLowerCase().includes(search.toLowerCase())));
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!draft.name.trim() || !draft.target_url.trim()) {
+      toast.error("Suite name and target URL are required");
+      return;
+    }
+    const validated = validateUrl(draft.target_url);
+    if (!validated.ok) {
+      toast.error(validated.error);
+      return;
+    }
+    const normalized = { ...draft, name: draft.name.trim(), target_url: validated.url };
+    if (editing) update.mutate({ id: editing, d: normalized });
+    else create.mutate(normalized);
+  };
+  const needle = search.trim().toLowerCase();
+  const filtered = (suites.data ?? []).filter(s => [s.name, s.description ?? "", s.target_url].some(v => v.toLowerCase().includes(needle)));
   const toggle = (s: TestSuiteRow) => update.mutate({ id: s.id, d: { ...toDraft(s), enabled: !s.enabled } });
   const duplicate = (s: TestSuiteRow) => create.mutate({ ...toDraft(s), name: s.name + " (copy)", enabled: false });
 
@@ -50,10 +73,14 @@ function SuitesPage() {
           <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{s.name}</h3><Badge variant={s.enabled ? "success" : "muted"}>{s.enabled ? "Enabled" : "Disabled"}</Badge>{s.is_sample && <Badge variant="outline">Sample</Badge>}</div>
             {s.description && <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>}
             <a href={s.target_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-primary hover:underline">{s.target_url}<ExternalLink className="size-3 shrink-0" /></a>
-            <div className="mt-3 flex flex-wrap gap-2"><Badge variant="secondary">{PROFILES[s.profile].label}</Badge><Badge variant="outline">{BROWSERS[s.browsers[0] ?? "chromium"].label}</Badge><Badge variant="outline">{DEVICES[s.devices[0] ?? "desktop"].label}</Badge><Badge variant="outline">{s.schedule === "manual" ? "Manual" : s.schedule === "daily" ? "Daily" : "Weekly"}</Badge></div></div>
+            <div className="mt-3 flex flex-wrap gap-2"><Badge variant="secondary">{PROFILES[s.profile].label}</Badge><Badge variant="outline">{BROWSERS[s.browsers[0] ?? "chromium"].label}</Badge><Badge variant="outline">{DEVICES[s.devices[0] ?? "desktop"].label}</Badge><Badge variant="outline">{s.schedule === "manual" ? "Manual" : s.schedule === "daily" ? "Daily" : "Weekly"}</Badge></div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>{suiteStats(s.id, runs.data).count} saved run{suiteStats(s.id, runs.data).count === 1 ? "" : "s"}</span>
+              {suiteStats(s.id, runs.data).latestStatus ? <><span>· Latest</span><StatusBadge status={suiteStats(s.id, runs.data).latestStatus!} /></> : <Badge variant="muted">No runs yet</Badge>}
+            </div></div>
           <div className="flex flex-wrap gap-1"><Button asChild size="sm"><Link to="/tests/new" search={{ suite: s.id }}><Play className="size-3.5" /> Run now</Link></Button>
-            <Button variant="ghost" size="icon" aria-label={s.enabled ? "Disable suite" : "Enable suite"} onClick={() => toggle(s)}>{s.enabled ? <ToggleRight className="size-4" /> : <ToggleLeft className="size-4" />}</Button>
-            <Button variant="ghost" size="icon" aria-label="Edit suite" onClick={() => { setDraft(toDraft(s)); setEditing(s.id); setFormOpen(true); }}><Edit2 className="size-4" /></Button>
+            <Button variant="ghost" size="icon" aria-label={s.enabled ? "Disable suite" : "Enable suite"} title={s.is_sample ? "Sample suites are read-only" : s.enabled ? "Disable suite" : "Enable suite"} disabled={s.is_sample} onClick={() => toggle(s)}>{s.enabled ? <ToggleRight className="size-4" /> : <ToggleLeft className="size-4" />}</Button>
+            <Button variant="ghost" size="icon" aria-label="Edit suite" title={s.is_sample ? "Duplicate a sample suite to customize it" : "Edit suite"} disabled={s.is_sample} onClick={() => { setDraft(toDraft(s)); setEditing(s.id); setFormOpen(true); }}><Edit2 className="size-4" /></Button>
             <Button variant="ghost" size="icon" aria-label="Duplicate suite" onClick={() => duplicate(s)}><Copy className="size-4" /></Button>
             <Button variant="ghost" size="icon" aria-label="Delete suite" disabled={s.is_sample} onClick={() => { if (window.confirm(`Delete suite "${s.name}"?`)) remove.mutate(s.id); }}><Trash2 className="size-4 text-destructive" /></Button></div>
         </div></div>)}</div>}

@@ -16,6 +16,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedSuitesRouteImport } from './routes/_authenticated/suites'
 import { Route as AuthenticatedRunsRunIdRouteImport } from './routes/_authenticated/runs.$runId'
 import { Route as AuthenticatedTestsNewRouteImport } from './routes/_authenticated/tests.new'
 
@@ -53,6 +54,11 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSuitesRoute = AuthenticatedSuitesRouteImport.update({
+  id: '/suites',
+  path: '/suites',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedRunsRunIdRoute = AuthenticatedRunsRunIdRouteImport.update({
   id: '/runs/$runId',
   path: '/runs/$runId',
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/suites': typeof AuthenticatedSuitesRoute
   '/runs/$runId': typeof AuthenticatedRunsRunIdRoute
   '/tests/new': typeof AuthenticatedTestsNewRoute
 }
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/suites': typeof AuthenticatedSuitesRoute
   '/runs/$runId': typeof AuthenticatedRunsRunIdRoute
   '/tests/new': typeof AuthenticatedTestsNewRoute
 }
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/suites': typeof AuthenticatedSuitesRoute
   '/_authenticated/runs/$runId': typeof AuthenticatedRunsRunIdRoute
   '/_authenticated/tests/new': typeof AuthenticatedTestsNewRoute
 }
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/history'
     | '/settings'
+    | '/suites'
     | '/runs/$runId'
     | '/tests/new'
   fileRoutesByTo: FileRoutesByTo
@@ -115,6 +125,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/history'
     | '/settings'
+    | '/suites'
     | '/runs/$runId'
     | '/tests/new'
   id:
@@ -126,6 +137,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/history'
     | '/_authenticated/settings'
+    | '/_authenticated/suites'
     | '/_authenticated/runs/$runId'
     | '/_authenticated/tests/new'
   fileRoutesById: FileRoutesById
@@ -188,6 +200,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/suites': {
+      id: '/_authenticated/suites'
+      path: '/suites'
+      fullPath: '/suites'
+      preLoaderRoute: typeof AuthenticatedSuitesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/runs/$runId': {
       id: '/_authenticated/runs/$runId'
       path: '/runs/$runId'
@@ -209,6 +228,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSuitesRoute: typeof AuthenticatedSuitesRoute
   AuthenticatedRunsRunIdRoute: typeof AuthenticatedRunsRunIdRoute
   AuthenticatedTestsNewRoute: typeof AuthenticatedTestsNewRoute
 }
@@ -217,6 +237,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSuitesRoute: AuthenticatedSuitesRoute,
   AuthenticatedRunsRunIdRoute: AuthenticatedRunsRunIdRoute,
   AuthenticatedTestsNewRoute: AuthenticatedTestsNewRoute,
 }
