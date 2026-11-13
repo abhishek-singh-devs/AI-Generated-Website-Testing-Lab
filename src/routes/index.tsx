@@ -1,199 +1,210 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Activity, ArrowRight, CheckCircle2, Clock3, Gauge, History, Layers3, ShieldCheck, SlidersHorizontal, Sparkles } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useState } from "react";
+import {
+  ArrowRight,
+  Radar,
+  Accessibility,
+  Smartphone,
+  Gauge,
+  Search,
+  ShieldCheck,
+  Layers,
+  History,
+  FlaskConical,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/lab/common";
-import { ScoreRing } from "@/components/lab/score-ring";
-import { PROFILES, PROFILE_IDS } from "@/lib/testing/constants";
+import { supabase } from "@/integrations/supabase/client";
+
+const TITLE = "AI-Generated Website Testing Lab — QA checks for generated sites";
+const DESC =
+  "Paste a URL and run smoke, accessibility, responsive, performance and SEO checks on AI-generated websites. Scored reports, prioritized fixes and run history.";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "SiteCheck Studio — AI Website Testing Lab" },
-      { name: "description", content: "A polished QA workspace for AI-generated websites. Measure page responses, review prioritized findings, and organize demo test runs." },
-      { property: "og:title", content: "SiteCheck Studio — AI Website Testing Lab" },
-      { property: "og:description", content: "Measure what can be measured. Clearly label simulated browser and AI checks." },
+      { title: TITLE },
+      { name: "description", content: DESC },
+      { property: "og:title", content: TITLE },
+      { property: "og:description", content: DESC },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: Index,
+  component: Landing,
 });
 
-const features = [
-  { icon: Activity, title: "Real response checks", description: "Capture HTTP status, response timing, headers, and HTML metadata from a server-side page fetch." },
-  { icon: ShieldCheck, title: "Safer URL validation", description: "Normalize website addresses and reject unsupported protocols, credentials, and local or private targets." },
-  { icon: Gauge, title: "Prioritized QA findings", description: "Review weighted scores, severity labels, clear explanations, and suggested fixes in one report." },
-  { icon: Layers3, title: "Reusable test suites", description: "Save a URL, profile, browser, device, and schedule preference for repeatable manual runs." },
-  { icon: History, title: "Searchable run history", description: "Find previous reports by URL, status, profile, date range, or sample-versus-personal source." },
-  { icon: SlidersHorizontal, title: "Workspace defaults", description: "Set your preferred profile, browser, device, pass threshold, and demo notification preferences." },
+function useSignedIn() {
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSignedIn(Boolean(data.session)));
+    const { data } = supabase.auth.onAuthStateChange((_e, session) => setSignedIn(Boolean(session)));
+    return () => data.subscription.unsubscribe();
+  }, []);
+  return signedIn;
+}
+
+const PROFILES = [
+  { icon: Radar, name: "Smoke", text: "Loads, returns 200, core markup intact." },
+  { icon: Accessibility, name: "Accessibility", text: "Alt text, labels, landmarks, language." },
+  { icon: Smartphone, name: "Responsive", text: "Viewport meta, overflow, breakpoints." },
+  { icon: Gauge, name: "Performance", text: "Response time, payload, compression, caching." },
+  { icon: Search, name: "SEO", text: "Title, description, canonical, social cards." },
+  { icon: ShieldCheck, name: "Comprehensive", text: "All 32 checks across every category." },
 ];
 
-const previewChecks = [
-  { name: "HTTP response", detail: "200 OK · measured", status: "pass" as const },
-  { name: "Page metadata", detail: "Title + description · measured", status: "pass" as const },
-  { name: "Mobile layout", detail: "Viewport review · simulated", status: "demo" as const },
-  { name: "AI review", detail: "Suggested fixes · simulated", status: "demo" as const },
-];
+function Landing() {
+  const signedIn = useSignedIn();
 
-const steps = [
-  { number: "01", title: "Enter a website", description: "Paste a public URL and choose a QA profile, browser, and device." },
-  { number: "02", title: "Watch the demo run", description: "Follow a step-by-step progress console while measured and simulated checks are kept distinct." },
-  { number: "03", title: "Triage the report", description: "Use the score, severity, and fix suggestions to decide what to investigate next." },
-];
-
-function Index() {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
-      <div className="pointer-events-none absolute inset-0 bg-grid opacity-35" aria-hidden />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[560px] bg-glow opacity-35" aria-hidden />
-
-      <header className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
-        <Link to="/" aria-label="SiteCheck Studio home" className="flex shrink-0 items-center gap-2.5">
-          <Logo />
-          <span className="text-sm font-semibold tracking-tight sm:text-base">SiteCheck Studio</span>
-        </Link>
-        <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex" aria-label="Main navigation">
-          <a href="#features" className="transition-colors hover:text-foreground">Features</a>
-          <a href="#profiles" className="transition-colors hover:text-foreground">Profiles</a>
-          <a href="#workflow" className="transition-colors hover:text-foreground">How it works</a>
-          <a href="#execution" className="transition-colors hover:text-foreground">Demo limits</a>
-        </nav>
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <Button variant="ghost" size="sm" asChild><Link to="/auth">Sign in</Link></Button>
-          <Button variant="glow" size="sm" asChild>
-            <Link to="/auth" search={{ redirect: "/dashboard" }}>Open the lab <ArrowRight className="size-4" /></Link>
-          </Button>
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/75 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-5">
+          <Link to="/" className="flex items-center gap-2.5">
+            <Logo />
+            <span className="font-semibold">Testing Lab</span>
+          </Link>
+          <div className="ml-auto flex items-center gap-2">
+            {signedIn ? (
+              <Button asChild variant="glow" size="sm">
+                <Link to="/dashboard">Open dashboard <ArrowRight /></Link>
+              </Button>
+            ) : (
+              <>
+                <Button asChild variant="ghost" size="sm">
+                  <Link to="/auth" search={{ redirect: undefined }}>Sign in</Link>
+                </Button>
+                <Button asChild variant="glow" size="sm">
+                  <Link to="/auth" search={{ redirect: undefined }}>Get started</Link>
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
-      <main className="relative z-10">
-        <section className="mx-auto grid max-w-7xl items-center gap-12 px-4 pb-20 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.02fr_0.98fr] lg:gap-16 lg:px-8 lg:pb-28 lg:pt-20">
-          <div className="max-w-2xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="primary" className="rounded-full px-3 py-1"><Sparkles className="mr-1.5 size-3.5" /> QA workspace for generated sites</Badge>
-              <Badge variant="warning" className="rounded-full px-3 py-1">Demo execution</Badge>
+      <main>
+        <section className="relative overflow-hidden border-b border-border/60">
+          <div className="absolute inset-0 bg-grid opacity-60" aria-hidden />
+          <div className="absolute inset-0 bg-glow" aria-hidden />
+          <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
+            <div className="animate-fade-up">
+              <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary-glow">
+                <FlaskConical className="size-3.5" /> QA for AI-built websites
+              </span>
+              <h1 className="mt-5 text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
+                Test what the AI built <span className="text-gradient">before your users do.</span>
+              </h1>
+              <p className="mt-5 max-w-xl text-lg text-muted-foreground">
+                Paste a URL, choose a test profile and get a scored report with failing checks, severity and suggested fixes — saved to your history.
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Button asChild variant="glow" size="lg">
+                  {signedIn ? (
+                    <Link to="/tests/new">Run a test <ArrowRight /></Link>
+                  ) : (
+                    <Link to="/auth" search={{ redirect: "/tests/new" }}>Run your first test <ArrowRight /></Link>
+                  )}
+                </Button>
+                <Button asChild variant="outline" size="lg">
+                  {signedIn ? <Link to="/history">View history</Link> : <Link to="/auth" search={{ redirect: "/dashboard" }}>See sample runs</Link>}
+                </Button>
+              </div>
+              <p className="mt-6 text-xs text-muted-foreground">
+                Demo build: HTTP, HTML and header checks fetch the real page. Browser rendering and AI review are simulated.
+              </p>
             </div>
-            <h1 className="mt-6 text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
-              Test generated websites
-              <span className="mt-1 block text-gradient">before they ship.</span>
-            </h1>
-            <p className="mt-6 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
-              Turn a public URL into a structured QA report. Check real page responses and markup, then explore clearly labeled demo findings for browser rendering and AI review.
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button variant="glow" size="lg" asChild><Link to="/auth" search={{ redirect: "/dashboard" }}>Open the lab <ArrowRight className="size-4" /></Link></Button>
-              <Button variant="outline" size="lg" asChild><a href="#features">Explore capabilities</a></Button>
-            </div>
-            <div className="mt-8 flex flex-wrap gap-x-5 gap-y-3 text-xs text-muted-foreground sm:text-sm">
-              <span className="inline-flex items-center gap-2"><CheckCircle2 className="size-4 text-success" /> Measured fetch checks</span>
-              <span className="inline-flex items-center gap-2"><Clock3 className="size-4 text-primary-glow" /> Progress + run history</span>
-              <span className="inline-flex items-center gap-2"><ShieldCheck className="size-4 text-primary-glow" /> Demo limits made explicit</span>
-            </div>
-          </div>
 
-          <div className="relative mx-auto w-full max-w-xl">
-            <div className="absolute -inset-5 rounded-[2rem] bg-primary/10 blur-3xl" aria-hidden />
-            <section className="surface-panel relative overflow-hidden rounded-2xl border border-border/80 shadow-card">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-5 py-4">
-                <div><p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Sample report</p><p className="mt-1 text-sm font-semibold">example.com</p></div>
-                <Badge variant="warning" className="rounded-full">Simulated preview</Badge>
-              </div>
-              <div className="flex flex-col items-center gap-5 p-5 sm:flex-row sm:items-center sm:p-6">
-                <ScoreRing score={86} size={116} stroke={9} label="Demo score" />
-                <div className="min-w-0 flex-1 text-center sm:text-left">
-                  <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                    <Badge variant="success" className="rounded-full">Sample status · Passed</Badge>
-                    <Badge variant="muted" className="rounded-full">Smoke + SEO</Badge>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-muted-foreground">A visual example of how measured page facts and simulated review findings are presented together.</p>
-                </div>
-              </div>
-              <div className="space-y-1 px-4 pb-4 sm:px-5 sm:pb-5">
-                {previewChecks.map((check) => (
-                  <div key={check.name} className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/45 px-3 py-3">
-                    <div className="min-w-0"><p className="truncate text-sm font-medium">{check.name}</p><p className="mt-0.5 text-xs text-muted-foreground">{check.detail}</p></div>
-                    <Badge variant={check.status === "pass" ? "success" : "warning"} className="shrink-0 rounded-full">{check.status === "pass" ? "Pass" : "Demo"}</Badge>
-                  </div>
-                ))}
-              </div>
-              <p className="border-t border-border/70 px-5 py-3 text-[11px] leading-5 text-muted-foreground">Illustrative UI only — these sample values are not a live test of example.com.</p>
-            </section>
+            <ReportPreview />
           </div>
         </section>
 
-        <section id="features" className="scroll-mt-20 border-y border-border/60 bg-surface/35">
-          <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-            <div className="max-w-2xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-glow">Built for QA triage</p>
-              <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">The essentials in one testing workspace.</h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">A responsive dashboard for exploring website quality, keeping reports organized, and understanding what the demo can actually verify.</p>
-            </div>
-            <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:mt-10 lg:grid-cols-3 lg:gap-4">
-              {features.map((feature) => (
-                <article key={feature.title} className="group rounded-2xl border border-border/70 bg-surface/70 p-5 transition-colors hover:border-primary/35 hover:bg-surface">
-                  <span className="grid size-10 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary-glow"><feature.icon className="size-5" /></span>
-                  <h3 className="mt-4 text-sm font-semibold">{feature.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{feature.description}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="profiles" className="scroll-mt-20">
-          <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div className="max-w-2xl">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-glow">Choose your coverage</p>
-                <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Six profiles. One report format.</h2>
-                <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">Start with a quick smoke check or explore a wider set of accessibility, responsive, performance, and SEO heuristics.</p>
+        <section className="mx-auto max-w-6xl px-5 py-20">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Six profiles, one report</h2>
+          <p className="mt-2 max-w-2xl text-muted-foreground">Pick the depth you need. Every run is scored out of 100 and graded passed, warning or failed.</p>
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {PROFILES.map(({ icon: I, name, text }) => (
+              <div key={name} className="surface-panel p-5 transition-colors hover:border-primary/40">
+                <span className="grid size-10 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary-glow">
+                  <I className="size-5" />
+                </span>
+                <h3 className="mt-4 font-semibold">{name}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{text}</p>
               </div>
-              <Button variant="outline" asChild><Link to="/auth" search={{ redirect: "/tests/new" }}>Try a profile <ArrowRight className="size-4" /></Link></Button>
-            </div>
-            <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {PROFILE_IDS.map((profile) => (
-                <article key={profile} className="rounded-xl border border-border/70 bg-surface/55 p-4">
-                  <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">{PROFILES[profile].label}</h3><Badge variant="muted" className="rounded-full capitalize">{profile}</Badge></div>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{PROFILES[profile].description}</p>
-                </article>
-              ))}
-            </div>
+            ))}
           </div>
         </section>
 
-        <section id="workflow" className="scroll-mt-20 border-y border-border/60 bg-surface/35">
-          <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-            <div className="max-w-2xl"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-glow">Simple workflow</p><h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">From URL to actionable report.</h2></div>
-            <div className="mt-8 grid gap-4 md:grid-cols-3">
-              {steps.map((step) => (
-                <article key={step.number} className="rounded-2xl border border-border/70 bg-background/55 p-5 sm:p-6">
-                  <p className="font-mono text-sm text-primary-glow">{step.number}</p><h3 className="mt-4 text-base font-semibold">{step.title}</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{step.description}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="execution" className="scroll-mt-20">
-          <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-            <div className="rounded-2xl border border-warning/25 bg-warning/5 p-5 sm:p-7 lg:flex lg:items-center lg:justify-between lg:gap-8">
-              <div className="max-w-3xl">
-                <div className="flex items-center gap-2 text-sm font-semibold text-warning"><ShieldCheck className="size-4" /> Transparent demo execution</div>
-                <h2 className="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">Measured checks stay separate from simulated ones.</h2>
-                <p className="mt-3 text-sm leading-6 text-muted-foreground">The lab can fetch a public page for HTTP, response-header, and HTML metadata checks. It does not launch a real browser or connect an AI reviewer in this demo, so rendering, screenshots, Core Web Vitals, and AI-generated findings are explicitly simulated.</p>
+        <section className="border-y border-border/60 bg-surface">
+          <div className="mx-auto grid max-w-6xl gap-10 px-5 py-20 md:grid-cols-3">
+            {[
+              { icon: Layers, title: "Reusable suites", text: "Save a site with its profile, browsers and devices. Re-run in one click after every regeneration." },
+              { icon: History, title: "Searchable history", text: "Filter runs by status, profile or URL, compare scores over time and export to CSV." },
+              { icon: ShieldCheck, title: "Honest labels", text: "Every check says whether it was measured from the live page or simulated for the demo." },
+            ].map(({ icon: I, title, text }) => (
+              <div key={title}>
+                <I className="size-6 text-primary-glow" />
+                <h3 className="mt-4 font-semibold">{title}</h3>
+                <p className="mt-1.5 text-sm text-muted-foreground">{text}</p>
               </div>
-              <Button variant="glow" className="mt-5 shrink-0 lg:mt-0" asChild><Link to="/auth" search={{ redirect: "/dashboard" }}>Explore the lab <ArrowRight className="size-4" /></Link></Button>
-            </div>
+            ))}
           </div>
+        </section>
+
+        <section className="mx-auto max-w-6xl px-5 py-20 text-center">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Ready to check your next generated site?</h2>
+          <p className="mx-auto mt-2 max-w-xl text-muted-foreground">Free demo workspace with sample runs and suites included.</p>
+          <Button asChild variant="glow" size="lg" className="mt-8">
+            {signedIn ? <Link to="/dashboard">Open dashboard <ArrowRight /></Link> : <Link to="/auth" search={{ redirect: undefined }}>Create a free account <ArrowRight /></Link>}
+          </Button>
         </section>
       </main>
 
-      <footer className="relative z-10 border-t border-border/70">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <Link to="/" className="flex items-center gap-2.5"><Logo className="size-7" /><span className="font-medium text-foreground">SiteCheck Studio</span></Link>
-          <p>Responsive QA workspace · Demo-first by design</p>
-          <a href="https://github.com/abhishek-singh-devs/AI-Generated-Website-Testing-Lab" target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground">View source on GitHub</a>
+      <footer className="border-t border-border/60">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-5 py-8 text-xs text-muted-foreground sm:flex-row">
+          <div className="flex items-center gap-2"><Logo className="size-6" /> AI-Generated Website Testing Lab</div>
+          <span>Test execution in this demo is partly simulated.</span>
         </div>
       </footer>
+    </div>
+  );
+}
+
+function ReportPreview() {
+  const rows = [
+    { icon: CheckCircle2, tone: "text-success", name: "Page returns 200", tag: "Measured" },
+    { icon: CheckCircle2, tone: "text-success", name: "Viewport meta present", tag: "Measured" },
+    { icon: AlertTriangle, tone: "text-warning", name: "3 images missing alt text", tag: "Measured" },
+    { icon: XCircle, tone: "text-destructive", name: "Horizontal overflow at 390px", tag: "Simulated" },
+    { icon: CheckCircle2, tone: "text-success", name: "Canonical URL set", tag: "Measured" },
+  ];
+  return (
+    <div className="surface-panel relative p-5 shadow-glow animate-fade-up">
+      <div className="flex items-center justify-between border-b border-border/70 pb-4">
+        <div className="min-w-0">
+          <p className="truncate font-mono text-sm">launch-page.example.app</p>
+          <p className="text-xs text-muted-foreground">Comprehensive · Chrome · Mobile</p>
+        </div>
+        <div className="text-right">
+          <p className="font-mono text-3xl font-semibold text-warning">78</p>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Warning</p>
+        </div>
+      </div>
+      <ul className="mt-3 space-y-1">
+        {rows.map(({ icon: I, tone, name, tag }) => (
+          <li key={name} className="flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-surface-raised">
+            <I className={`size-4 shrink-0 ${tone}`} />
+            <span className="flex-1 truncate">{name}</span>
+            <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">{tag}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 rounded-lg border border-primary/25 bg-primary/8 p-3 text-xs text-muted-foreground">
+        <span className="font-medium text-primary-glow">Suggested fix:</span> constrain the hero image with <code className="font-mono">max-width: 100%</code> to remove overflow on small screens.
+      </div>
     </div>
   );
 }

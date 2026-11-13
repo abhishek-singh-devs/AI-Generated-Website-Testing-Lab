@@ -30,5 +30,5 @@ use the editor.
 <!-- LOVABLE:END -->
 
 ## Project rules
-- Pure, testable logic (URL validation, scoring, history filtering) lives in `src/lib/`, never exported from route files — route modules are code-split and can pull in the backend client.
-- Every check carries `source: "measured" | "simulated"`; anything not derived from the live page fetch must be labelled simulated in the UI. Never imply real browser or AI testing when those providers are not connected.
+- Pure, testable logic (URL validation, scoring, history filtering) lives in `src/lib/`, never exported from route files — route modules are code-split and pull in the backend client.
+- Every check carries `source: "measured" | "simulated"`; anything not derived from the live page fetch must be labelled simulated in the UI — the app must never imply real browser or AI testing.

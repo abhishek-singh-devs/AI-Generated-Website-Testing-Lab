@@ -1,110 +1,137 @@
-# SiteCheck Studio
+# AI-Generated Website Testing Lab
 
-SiteCheck Studio is a responsive SaaS-style website QA workspace for AI-generated sites. It turns a public URL into a structured report, organizes demo runs, and makes the boundary between measured page facts and simulated browser/AI findings explicit.
+A full-stack web app for running QA checks against AI-generated websites. Paste a URL, pick a test profile, browser and device, and get a scored report with pass/fail checks, issue severity, suggested fixes and a re-run action. Every run is saved to a searchable history.
 
-> **Demo execution:** The server-side probe can fetch a public page and measure HTTP status, response time, response headers, payload size, and selected HTML metadata. Browser rendering, screenshots, visual breakpoints, Core Web Vitals, console inspection, internal-link crawling, and AI review are simulated. Daily/weekly suite schedules and notification preferences are saved as configuration only; they are not automatically executed or delivered.
+> **Demo execution notice.** HTTP status, response time, payload size, security headers and HTML structure are **measured** by fetching the real page server-side. Browser rendering, layout overflow, contrast, Core Web Vitals and the AI reviewer are **simulated** with deterministic demo output. Each check in a report is labelled *Measured* or *Simulated*. No API keys are required.
 
-## Product features
+## Features
 
-- **Public landing page** with capability overview, test profiles, workflow explanation, and clear demo limitations.
-- **Overview dashboard** with run metrics, score trends, issue categories, recurring findings, and recent reports.
-- **New Test workflow** with URL validation, six profiles, browser/device choices, optional instructions, simulated progress/logs, cancellation, and saved results.
-- **Run reports** with score, status, check-by-check results, severity filters, measured/simulated source badges, fix suggestions, rerun, and export actions.
-- **Test History** with URL/instruction/summary search, status/profile/date/source filters, pagination, and CSV export.
-- **Test Suites** with create/edit/duplicate/delete, enable/disable, run-now prefill, and manual/daily/weekly preference fields. Schedules are not automatically triggered.
-- **Settings** for profile/browser/device defaults, pass threshold, live-probe preference, notification preferences, and personal history cleanup.
-- **Authentication** using Supabase email/password and configured OAuth providers.
-- **Sample data** for exploring the dashboard and reports before running a personal test.
-
-## Stack
-
-- React 19 + TypeScript
-- TanStack Start and TanStack Router
-- TanStack Query
-- Tailwind CSS 4 and shadcn/Radix UI components
-- Supabase Auth + Postgres with row-level security
-- Vitest + Testing Library
-- Bun for install and CI
+- **Landing page** (`/`) with sign-in / dashboard links that follow your session.
+- **Accounts** — email + password (with reset), Google and Lovable sign-in.
+- **Overview** — tests run, pass rate, issues found, average duration, 14-day trend chart, issues by category, most common issues and recent runs.
+- **New Test** — URL validation (rejects private/local addresses), 6 profiles (smoke, accessibility, responsive, performance, SEO, comprehensive), browser + device selectors, optional instructions, animated progress log, then a saved result.
+- **Run details** — score ring, summary, checks grouped by category, severity filters, suggestions, JSON/Markdown export, re-run and delete.
+- **Test History** — search, filter by status/profile/source, CSV export.
+- **Test Suites** — create, edit, duplicate, pause and delete saved configurations; "Run now" pre-fills a new test. Sample suites are read-only.
+- **Settings** — display name, default profile/browser/device, pass threshold, live-fetch toggle, notification preferences, clear history.
+- Empty, loading and error states throughout; toast feedback for every action; responsive down to phone width.
 
 ## Routes
 
-| Route | Purpose |
-| --- | --- |
-| `/` | Public landing page |
-| `/auth` | Sign in, create account, and request a password reset |
-| `/reset-password` | Set a new password |
-| `/dashboard` | Authenticated overview |
-| `/tests/new` | Start a demo QA run |
-| `/history` | Search/filter/paginate previous runs |
-| `/runs/$runId` | Detailed run report |
-| `/suites` | Reusable test-suite management |
-| `/settings` | Personal workspace defaults and preferences |
-
-## Local development
-
-### Prerequisites
-
-- Bun (the repository lockfile and CI use Bun)
-- Node.js 20.19+ or a current Node 22+ release
-- A Supabase project with the app's tables and Auth configured
-
-### Setup
-
-1. Clone the repository.
-2. Install dependencies.
-3. Copy the environment template and set the values from your Supabase project.
-4. Start the development server.
-
-```bash
-git clone https://github.com/abhishek-singh-devs/AI-Generated-Website-Testing-Lab.git
-cd AI-Generated-Website-Testing-Lab
-bun install --frozen-lockfile
-cp .env.example .env
-bun run dev
-```
-
-The development server prints its local URL. Use the public landing page, then sign in to open the workspace. Sample rows are available to authenticated users.
-
-## Environment variables
-
-Copy `.env.example` and provide the same Supabase project URL and publishable key for the browser and server:
-
-| Variable | Used by | Required |
+| Path | Access | What it does |
 | --- | --- | --- |
-| `VITE_SUPABASE_URL` | Browser Supabase client | Yes |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Browser Supabase client | Yes |
-| `SUPABASE_URL` | Server-side Supabase auth middleware/client | Yes |
-| `SUPABASE_PUBLISHABLE_KEY` | Server-side Supabase auth middleware/client | Yes |
-| `SUPABASE_SERVICE_ROLE_KEY` | Optional server-only admin client | Only if an admin operation uses it; never expose with a `VITE_` prefix |
-| `LOVABLE_DB_MIGRATION_URL` | Drizzle migration tooling | Only for migration work |
+| `/` | Public | Landing page; header buttons switch to "Open dashboard" when signed in |
+| `/auth` | Public | Sign in / sign up / forgot password; `?redirect=/path` returns you after sign-in |
+| `/reset-password` | Public | Set a new password from the emailed link |
+| `/dashboard` | Signed in | Overview metrics, trend chart, issues by category, recent runs |
+| `/tests/new` | Signed in | New Test form + simulated progress + result. `?rerun=<runId>` re-runs a run, `?suite=<suiteId>` pre-fills from a suite, `?url=` pre-fills the URL |
+| `/history` | Signed in | Search/filter runs. Filters live in the URL: `q`, `status`, `profile`, `range` (`24h`/`7d`/`30d`), `source` (`mine`/`sample`), `page` |
+| `/runs/$runId` | Signed in | Full run report with re-run, export and delete |
+| `/suites` | Signed in | Create, edit, duplicate, pause/enable, delete and "Run now" for saved suites |
+| `/settings` | Signed in | Defaults, pass threshold, execution mode, notification preferences, clear history |
 
-Do not commit a populated `.env`. In Vercel, add the four required URL/publishable-key variables to the Production, Preview, and Development environments. The publishable key is intended for client use; keep any service-role key server-only.
+Signed-in pages live under `src/routes/_authenticated/`; that layout checks the session in the browser and redirects to `/auth` otherwise.
 
-## Database and authentication
+## Architecture
 
-The app reads and writes `test_runs`, `test_suites`, and `user_settings` in Supabase. Row-level security policies allow a user to access their own rows and the designated shared sample rows. The SQL migration is in `drizzle/migrations/0000_create_testing_lab_schema.sql`; the generated Supabase types are in `src/integrations/supabase/types.ts`.
+| Layer | Tech |
+| --- | --- |
+| Framework | TanStack Start v1 (React 19, file-based routing, SSR, server functions), Vite |
+| UI | Tailwind CSS v4 (tokens in `src/styles.css`), shadcn/ui, lucide icons, Recharts |
+| Data | TanStack Query on the client; Lovable Cloud (Postgres + Auth) with row-level security |
+| Server | `createServerFn` page probe in `src/lib/probe.functions.ts` |
 
-Configure email/password Auth and the OAuth providers you want to enable in Supabase. Add the app's local and deployed origins to the Auth redirect allow-list. The app does not embed database credentials or service-role keys in source.
-
-## Verification commands
-
-```bash
-bun run test       # routing, URL validation, scoring, and history filter tests
-bun run typecheck  # strict TypeScript check
-bun run build      # production Vite/TanStack Start build
-bun run lint       # ESLint
-bun run preview    # preview a production build locally
+```
+src/
+  routes/               index (landing), auth, reset-password
+    _authenticated/     dashboard, tests.new, history, runs.$runId, suites, settings (signed-in only)
+  components/app-shell  sidebar + header layout
+  components/lab/       shared panels, status badges, score ring, runs table
+  lib/testing/          types, constants, URL validation, check engine & scoring
+  lib/lab-data.ts       queries and mutations against the database
+  lib/probe.functions.ts server-side fetch of the target page
+  lib/history-filter.ts history search/filter logic
+  test/                 vitest tests (routing, URL validation, scoring, history filters)
 ```
 
-GitHub Actions runs tests, typecheck, and build on pushes to `main` and on pull requests.
+### Data model
 
-Automated coverage includes route matching, URL/SSRF validation, weighted scoring, deterministic simulated results, and combined history filters. A signed-in browser click-through remains unverified because no test account was available; no production test account was created.
+**`test_runs`** — one row per run
+`id`, `user_id`, `suite_id` (nullable), `url`, `profile`, `browser`, `device`, `instructions`, `status` (`passed`/`warning`/`failed`/`error`), `score` (0–100), `duration_ms`, `checks` (JSON array of check results), `summary`, `issues_count`, `critical_count`, `mode` (`hybrid` = live fetch + simulation, `simulated`), `is_sample`, `created_at`, `completed_at`.
 
-## Execution model and limitations
+Each entry in `checks`: `id`, `name`, `category`, `status` (`pass`/`fail`/`warn`/`skip`), `severity` (`critical`/`high`/`medium`/`low`/`info`), `message`, `suggestion`, `source` (`measured`/`simulated`), `durationMs`.
 
-- **Measured:** a single server-side fetch of the supplied public URL; response status/final URL/time, response headers, limited body bytes, and regex-based HTML metadata inspection.
-- **Simulated:** browser rendering, screenshot capture, layout/overflow checks, visual contrast, performance vitals, console/link crawling, AI summaries/review, and any related progress/result claims.
-- **Manual only:** suite “daily” or “weekly” preferences do not schedule runs.
-- **Not connected:** email notifications are preference toggles only.
+**`test_suites`** — saved configurations
+`id`, `user_id`, `name`, `description`, `target_url`, `profile`, `browsers[]`, `devices[]`, `schedule` (`manual`/`daily`/`weekly`), `enabled`, `is_sample`, `created_at`, `updated_at`.
 
-These limitations are surfaced in the New Test workflow, reports, settings, and UI badges. The app is a QA workflow demo rather than a hosted Playwright or AI testing service.
+**`user_settings`** — one row per user
+`user_id`, `display_name`, `default_profile`, `default_browser`, `default_device`, `pass_threshold`, `notify_on_failure`, `live_probe`, `weekly_digest`, `updated_at`.
+
+Users can only read and change their own rows. Sample runs and suites (`is_sample = true`) are readable by every signed-in user and cannot be edited.
+
+### Measured vs simulated
+
+| Measured from the live page fetch (when "Live page fetch" is on and the site is reachable) | Always simulated in this demo |
+| --- | --- |
+| Reachability & HTTP status, HTTPS, response time, page size, compression, cache headers, security headers | Browser rendering & console errors, broken-link crawl |
+| `<title>`, charset, favicon, `lang`, image alt text, form labels, empty buttons, H1 count | Colour contrast, focus visibility |
+| Viewport meta, zoom blocking, fixed-width elements, script count | Horizontal overflow, tap-target size |
+| Meta description, canonical, Open Graph tags, `noindex` | Core Web Vitals (LCP, CLS) |
+| | AI reviewer (custom instructions, run summary) |
+| | Progress timing, browser/device emulation |
+| | Suite schedules and email notifications (stored, never executed) |
+
+Simulated checks are deterministic per URL/profile/browser/device, so a re-run gives stable demo results.
+
+### Scoring
+
+Each check has a severity weight (critical 25, high 12, medium 6, low 2, info 1). A failure loses its full weight, a warning half; skipped checks are ignored. Score = 100 × (1 − lost / total).
+
+- **Failed** — any critical failure, or score under 50.
+- **Passed** — no failures and score ≥ pass threshold (default 80, set in Settings).
+- **Warning** — anything else.
+
+## Setup
+
+```sh
+bun install
+bun run dev        # http://localhost:8080
+```
+
+## Test commands
+
+```sh
+bun run test       # vitest run
+bun run typecheck  # tsc --noEmit
+bun run build      # production build (client + server worker)
+```
+
+| Test file | Covers |
+| --- | --- |
+| `src/test/app-routing.test.tsx` | `/` resolves to a real page |
+| `src/test/testing-rules.test.ts` | URL validation (https added, private/local hosts, bad schemes, credentials) and scoring/status rules |
+| `src/test/history-filter.test.ts` | History search, status, profile, date range and mine/sample filters |
+
+### Environment variables
+
+| Variable | Where | Purpose |
+| --- | --- | --- |
+| `VITE_SUPABASE_URL` | `.env` (auto) | Backend URL used by the browser client |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | `.env` (auto) | Public (publishable) backend key |
+| `VITE_SUPABASE_PROJECT_ID` | `.env` (auto) | Backend project id |
+
+All three are created by Lovable Cloud and are safe to ship to the browser. No secret API keys are needed to run the demo.
+
+## Configuration
+
+- **Live page fetch** — Settings → Execution. Off = fully simulated runs.
+- **Pass threshold** — Settings → Test defaults (50–100).
+- **Real browser / AI providers** — not configured. To make simulated checks real, connect a hosted browser (e.g. Playwright on a browser service) inside the probe server function and route instructions/summaries through an AI model, then switch those checks' `source` to `measured`.
+
+## Limitations
+
+- Rendering, overflow, contrast, Core Web Vitals and AI review are simulated.
+- The page fetch sees server HTML only; client-rendered content isn't executed.
+- Suite schedules are saved but not executed automatically.
+- Notification preferences are stored but no emails are sent.
+- Local and private network URLs are blocked by design.

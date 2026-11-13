@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Environment files (never commit populated credentials)
+.env
+.env.*
+!.env.example

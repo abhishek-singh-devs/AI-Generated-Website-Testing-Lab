@@ -7,37 +7,16 @@ const PRIVATE_V4 = [
   /^169\.254\./,
   /^192\.168\./,
   /^172\.(1[6-9]|2\d|3[01])\./,
-  /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./, // shared address space (100.64.0.0/10)
-  /^192\.0\.0\./, // IETF protocol assignments
-  /^192\.0\.2\./, // documentation
-  /^198\.(18|19)\./, // benchmarking
-  /^198\.51\.100\./, // documentation
-  /^203\.0\.113\./, // documentation
-  /^(22[4-9]|23\d|24\d|25[0-5])\./, // multicast
-  /^240\./, // reserved
 ];
 
 export function isPrivateHost(hostname: string): boolean {
   const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal"))
     return true;
-  if (!h.includes(":")) return PRIVATE_V4.some((re) => re.test(h));
-  if (h === "::" || h === "::1" || h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe") || h.startsWith("ff")) {
-    return true;
+  if (h === "::1" || h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80")) {
+    return h.includes(":");
   }
-  // IPv4-mapped IPv6 can otherwise bypass the IPv4 deny list (e.g. ::ffff:7f00:1).
-  if (h.startsWith("::ffff:")) {
-    const mapped = h.slice(7);
-    if (mapped.includes(".")) return PRIVATE_V4.some((re) => re.test(mapped));
-    const groups = mapped.split(":");
-    if (groups.length === 2 && groups.every((group) => /^[0-9a-f]{1,4}$/.test(group))) {
-      const high = Number.parseInt(groups[0] ?? "0", 16);
-      const low = Number.parseInt(groups[1] ?? "0", 16);
-      const ipv4 = [high >> 8, high & 255, low >> 8, low & 255].join(".");
-      return PRIVATE_V4.some((re) => re.test(ipv4));
-    }
-  }
-  return false;
+  return PRIVATE_V4.some((re) => re.test(h));
 }
 
 /** Validate and normalise a user-entered website URL. Bare domains get https:// added. */

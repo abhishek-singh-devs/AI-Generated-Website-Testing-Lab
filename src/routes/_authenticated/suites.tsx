@@ -1,99 +1,378 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
-import { Copy, Edit2, ExternalLink, Layers, Play, Plus, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import { Layers, Plus, Play, Pencil, Trash2, Copy, Search, CalendarClock, Loader2, Monitor, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { PageHeader, Panel, PanelHeader } from "@/components/lab/common";
-import { suitesQuery, runsQuery, createSuite, updateSuite, deleteSuite, keys } from "@/lib/lab-data";
-import { validateUrl } from "@/lib/testing/url";
-import { StatusBadge } from "@/components/lab/status";
-import { BROWSERS, DEVICES, PROFILES } from "@/lib/testing/constants";
-import type { TestProfile, BrowserId, DeviceId, TestSuiteRow, TestRunRow } from "@/lib/testing/types";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { EmptyState, PageHeader, Panel } from "@/components/lab/common";
+import { StatusBadge, scoreTone } from "@/components/lab/status";
+import { SiteMark } from "@/components/lab/runs-table";
+import { createSuite, deleteSuite, keys, runsQuery, suitesQuery, updateSuite, type SuiteInput } from "@/lib/lab-data";
+import { BROWSERS, BROWSER_IDS, DEVICES, DEVICE_IDS, PROFILES, PROFILE_IDS } from "@/lib/testing/constants";
+import { displayHost, validateUrl } from "@/lib/testing/url";
+import { fmtAgo } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import type { BrowserId, DeviceId, TestProfile, TestRunRow, TestSuiteRow } from "@/lib/testing/types";
 
 export const Route = createFileRoute("/_authenticated/suites")({
-  head: () => ({ meta: [{ title: "Test Suites — AI Website Testing Lab" }, { name: "description", content: "Manage reusable website QA test configurations." }] }),
+  head: () => ({
+    meta: [
+      { title: "Test suites — AI Website Testing Lab" },
+      { name: "description", content: "Saved test configurations you can run again in one click." },
+      { property: "og:title", content: "Test suites — AI Website Testing Lab" },
+      { property: "og:description", content: "Saved test configurations you can run again in one click." },
+    ],
+  }),
   component: SuitesPage,
 });
 
-type Draft = { name: string; description: string; target_url: string; profile: TestProfile; browser: BrowserId; device: DeviceId; schedule: TestSuiteRow["schedule"]; enabled: boolean };
-const blank: Draft = { name: "", description: "", target_url: "", profile: "comprehensive", browser: "chromium", device: "desktop", schedule: "manual", enabled: true };
-const toDraft = (s: TestSuiteRow): Draft => ({ name: s.name, description: s.description ?? "", target_url: s.target_url, profile: s.profile, browser: s.browsers[0] ?? "chromium", device: s.devices[0] ?? "desktop", schedule: s.schedule, enabled: s.enabled });
+const SCHEDULE_LABEL: Record<TestSuiteRow["schedule"], string> = { manual: "Manual", daily: "Daily", weekly: "Weekly" };
 
-function suiteStats(suiteId: string, runs: TestRunRow[] | undefined) {
-  const linked = (runs ?? []).filter((run) => run.suite_id === suiteId);
-  return { count: linked.length, latestStatus: linked[0]?.status ?? null };
-}
+const EMPTY_FORM: SuiteInput = {
+  name: "",
+  description: null,
+  target_url: "",
+  profile: "comprehensive",
+  browsers: ["chromium"],
+  devices: ["desktop"],
+  schedule: "manual",
+  enabled: true,
+};
 
 function SuitesPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const suites = useQuery(suitesQuery);
   const runs = useQuery(runsQuery);
-  const [draft, setDraft] = useState<Draft>(blank);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const refresh = () => qc.invalidateQueries({ queryKey: keys.suites });
-  const closeForm = () => { setFormOpen(false); setEditing(null); setDraft(blank); };
-  const create = useMutation({ mutationFn: (d: Draft) => createSuite({ ...d, description: d.description.trim() || null, browsers: [d.browser], devices: [d.device] }), onSuccess: async () => { await refresh(); toast.success("Suite created"); closeForm(); }, onError: (e) => toast.error("Couldn't create suite", { description: e.message }) });
-  const update = useMutation({ mutationFn: ({ id, d }: { id: string; d: Draft }) => updateSuite(id, { ...d, description: d.description.trim() || null, browsers: [d.browser], devices: [d.device] }), onSuccess: async () => { await refresh(); toast.success("Suite updated"); closeForm(); }, onError: (e) => toast.error("Couldn't update suite", { description: e.message }) });
-  const remove = useMutation({ mutationFn: deleteSuite, onSuccess: async () => { await refresh(); toast.success("Suite deleted"); }, onError: (e) => toast.error("Couldn't delete suite", { description: e.message }) });
-  const openNew = () => { setDraft(blank); setEditing(null); setFormOpen(true); };
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (!draft.name.trim() || !draft.target_url.trim()) {
-      toast.error("Suite name and target URL are required");
-      return;
-    }
-    const validated = validateUrl(draft.target_url);
-    if (!validated.ok) {
-      toast.error(validated.error);
-      return;
-    }
-    const normalized = { ...draft, name: draft.name.trim(), target_url: validated.url };
-    if (editing) update.mutate({ id: editing, d: normalized });
-    else create.mutate(normalized);
-  };
-  const needle = search.trim().toLowerCase();
-  const filtered = (suites.data ?? []).filter(s => [s.name, s.description ?? "", s.target_url].some(v => v.toLowerCase().includes(needle)));
-  const toggle = (s: TestSuiteRow) => update.mutate({ id: s.id, d: { ...toDraft(s), enabled: !s.enabled } });
-  const duplicate = (s: TestSuiteRow) => create.mutate({ ...toDraft(s), name: s.name + " (copy)", enabled: false });
+  const [q, setQ] = useState("");
+  const [editing, setEditing] = useState<{ id: string | null; form: SuiteInput } | null>(null);
+  const [deleting, setDeleting] = useState<TestSuiteRow | null>(null);
 
-  return <div className="space-y-6">
-    <PageHeader title="Test Suites" description="Save reusable test configurations, then launch runs against them." actions={<Button onClick={openNew}><Plus className="size-4" /> Create suite</Button>} />
-    <div className="rounded-lg border border-warning/25 bg-warning/8 px-4 py-3 text-xs text-warning">Schedules are configuration-only in this demo. Daily/weekly suites are not automatically executed.</div>
-    <Panel><PanelHeader title="Your suites" description={suites.data ? `${suites.data.length} saved suite${suites.data.length === 1 ? "" : "s"}` : "Reusable test profiles"} />
-      <div className="p-4"><Input aria-label="Search suites" placeholder="Search by name or target URL…" value={search} onChange={e => setSearch(e.target.value)} className="mb-4" />
-        {suites.isLoading ? <p className="py-8 text-center text-sm text-muted-foreground">Loading suites…</p> : suites.isError ? <p className="py-8 text-center text-sm text-destructive">Couldn't load suites: {suites.error.message}</p> : filtered.length === 0 ? <div className="py-12 text-center"><Layers className="mx-auto mb-3 size-8 text-muted-foreground" /><p className="font-medium">{search ? "No matching suites" : "No suites yet"}</p><p className="mt-1 text-sm text-muted-foreground">Create a suite to save a website, profile, browser, and device.</p><Button variant="outline" className="mt-4" onClick={openNew}><Plus className="size-4" /> Create your first suite</Button></div> :
-        <div className="space-y-3">{filtered.map(s => <div key={s.id} className="rounded-xl border border-border bg-surface p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{s.name}</h3><Badge variant={s.enabled ? "success" : "muted"}>{s.enabled ? "Enabled" : "Disabled"}</Badge>{s.is_sample && <Badge variant="outline">Sample</Badge>}</div>
-            {s.description && <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>}
-            <a href={s.target_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-primary hover:underline">{s.target_url}<ExternalLink className="size-3 shrink-0" /></a>
-            <div className="mt-3 flex flex-wrap gap-2"><Badge variant="secondary">{PROFILES[s.profile].label}</Badge><Badge variant="outline">{BROWSERS[s.browsers[0] ?? "chromium"].label}</Badge><Badge variant="outline">{DEVICES[s.devices[0] ?? "desktop"].label}</Badge><Badge variant="outline">{s.schedule === "manual" ? "Manual" : s.schedule === "daily" ? "Daily" : "Weekly"}</Badge></div>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>{suiteStats(s.id, runs.data).count} saved run{suiteStats(s.id, runs.data).count === 1 ? "" : "s"}</span>
-              {suiteStats(s.id, runs.data).latestStatus ? <><span>· Latest</span><StatusBadge status={suiteStats(s.id, runs.data).latestStatus!} /></> : <Badge variant="muted">No runs yet</Badge>}
-            </div></div>
-          <div className="flex flex-wrap gap-1"><Button asChild size="sm"><Link to="/tests/new" search={{ suite: s.id }}><Play className="size-3.5" /> Run now</Link></Button>
-            <Button variant="ghost" size="icon" aria-label={s.enabled ? "Disable suite" : "Enable suite"} title={s.is_sample ? "Sample suites are read-only" : s.enabled ? "Disable suite" : "Enable suite"} disabled={s.is_sample} onClick={() => toggle(s)}>{s.enabled ? <ToggleRight className="size-4" /> : <ToggleLeft className="size-4" />}</Button>
-            <Button variant="ghost" size="icon" aria-label="Edit suite" title={s.is_sample ? "Duplicate a sample suite to customize it" : "Edit suite"} disabled={s.is_sample} onClick={() => { setDraft(toDraft(s)); setEditing(s.id); setFormOpen(true); }}><Edit2 className="size-4" /></Button>
-            <Button variant="ghost" size="icon" aria-label="Duplicate suite" onClick={() => duplicate(s)}><Copy className="size-4" /></Button>
-            <Button variant="ghost" size="icon" aria-label="Delete suite" disabled={s.is_sample} onClick={() => { if (window.confirm(`Delete suite "${s.name}"?`)) remove.mutate(s.id); }}><Trash2 className="size-4 text-destructive" /></Button></div>
-        </div></div>)}</div>}
-      </div></Panel>
-    {formOpen && <Panel><PanelHeader title={editing ? "Edit suite" : "Create suite"} description="Configure the reusable run settings." /><form onSubmit={submit} className="grid gap-4 p-5 sm:grid-cols-2">
-      <div><Label htmlFor="suite-name">Name</Label><Input id="suite-name" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} maxLength={80} required /></div>
-      <div><Label htmlFor="suite-url">Target URL</Label><Input id="suite-url" type="url" placeholder="https://example.com" value={draft.target_url} onChange={e => setDraft({ ...draft, target_url: e.target.value })} required /></div>
-      <div className="sm:col-span-2"><Label htmlFor="suite-description">Description (optional)</Label><Textarea id="suite-description" value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} rows={2} maxLength={500} /></div>
-      <div><Label htmlFor="suite-profile">Test profile</Label><select id="suite-profile" className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={draft.profile} onChange={e => setDraft({ ...draft, profile: e.target.value as TestProfile })}>{Object.entries(PROFILES).map(([id, p]) => <option key={id} value={id}>{p.label}</option>)}</select></div>
-      <div><Label htmlFor="suite-browser">Browser</Label><select id="suite-browser" className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={draft.browser} onChange={e => setDraft({ ...draft, browser: e.target.value as BrowserId })}>{Object.entries(BROWSERS).map(([id, b]) => <option key={id} value={id}>{b.label}</option>)}</select></div>
-      <div><Label htmlFor="suite-device">Device</Label><select id="suite-device" className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={draft.device} onChange={e => setDraft({ ...draft, device: e.target.value as DeviceId })}>{Object.entries(DEVICES).map(([id, d]) => <option key={id} value={id}>{d.label} · {d.viewport}</option>)}</select></div>
-      <div><Label htmlFor="suite-schedule">Schedule</Label><select id="suite-schedule" className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={draft.schedule} onChange={e => setDraft({ ...draft, schedule: e.target.value as Draft["schedule"] })}><option value="manual">Manual</option><option value="daily">Daily (not automated)</option><option value="weekly">Weekly (not automated)</option></select></div>
-      <div className="sm:col-span-2 flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={closeForm}>Cancel</Button><Button type="submit" disabled={create.isPending || update.isPending}>{editing ? "Save changes" : "Create suite"}</Button></div>
-    </form></Panel>}
-  </div>;
+  const lastRunBySuite = useMemo(() => {
+    const m = new Map<string, TestRunRow>();
+    for (const r of runs.data ?? []) if (r.suite_id && !m.has(r.suite_id)) m.set(r.suite_id, r);
+    return m;
+  }, [runs.data]);
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return (suites.data ?? []).filter((s) => !term || s.name.toLowerCase().includes(term) || s.target_url.toLowerCase().includes(term));
+  }, [suites.data, q]);
+  const mine = filtered.filter((s) => !s.is_sample);
+  const samples = filtered.filter((s) => s.is_sample);
+
+  const refresh = () => qc.invalidateQueries({ queryKey: keys.suites });
+
+  const toggle = async (s: TestSuiteRow, enabled: boolean) => {
+    try {
+      await updateSuite(s.id, { enabled });
+      await refresh();
+      toast.success(enabled ? "Suite enabled" : "Suite paused");
+    } catch (e) {
+      toast.error("Couldn't update suite", { description: e instanceof Error ? e.message : undefined });
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    try {
+      await deleteSuite(deleting.id);
+      await refresh();
+      toast.success("Suite deleted");
+    } catch (e) {
+      toast.error("Couldn't delete suite", { description: e instanceof Error ? e.message : undefined });
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const fromSuite = (s: TestSuiteRow, copy: boolean): SuiteInput => ({
+    name: copy ? `${s.name} (copy)` : s.name,
+    description: s.description,
+    target_url: s.target_url,
+    profile: s.profile,
+    browsers: s.browsers,
+    devices: s.devices,
+    schedule: s.schedule,
+    enabled: s.enabled,
+  });
+
+  const run = (s: TestSuiteRow) => navigate({ to: "/tests/new", search: { suite: s.id } });
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Test suites"
+        description="Save a site, profile and environment once, then re-run it whenever the generated site changes."
+        actions={
+          <Button variant="glow" onClick={() => setEditing({ id: null, form: { ...EMPTY_FORM } })}>
+            <Plus /> New suite
+          </Button>
+        }
+      />
+
+      <div className="relative max-w-sm">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search suites or URLs" className="pl-9" aria-label="Search suites" />
+      </div>
+
+      {suites.isLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-56 rounded-xl" />)}
+        </div>
+      ) : suites.isError ? (
+        <Panel><EmptyState icon={Layers} title="Couldn't load suites" description="Check your connection and try again." action={<Button variant="outline" onClick={() => suites.refetch()}>Retry</Button>} /></Panel>
+      ) : (
+        <>
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-muted-foreground">Your suites <span className="font-mono">({mine.length})</span></h2>
+            {mine.length === 0 ? (
+              <Panel>
+                <EmptyState
+                  icon={Layers}
+                  title={q ? "No suites match your search" : "No suites yet"}
+                  description={q ? "Try a different name or URL." : "Create a suite to keep a site's test setup ready, or duplicate one of the samples below."}
+                  action={!q && <Button variant="glow" onClick={() => setEditing({ id: null, form: { ...EMPTY_FORM } })}><Plus /> Create your first suite</Button>}
+                />
+              </Panel>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {mine.map((s) => (
+                  <SuiteCard key={s.id} suite={s} lastRun={lastRunBySuite.get(s.id)} onRun={() => run(s)} onEdit={() => setEditing({ id: s.id, form: fromSuite(s, false) })} onDuplicate={() => setEditing({ id: null, form: fromSuite(s, true) })} onDelete={() => setDeleting(s)} onToggle={(v) => toggle(s, v)} />
+                ))}
+              </div>
+            )}
+          </section>
+
+          {samples.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold text-muted-foreground">Sample suites <span className="font-normal">· read-only, duplicate to customise</span></h2>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {samples.map((s) => (
+                  <SuiteCard key={s.id} suite={s} lastRun={lastRunBySuite.get(s.id)} onRun={() => run(s)} onDuplicate={() => setEditing({ id: null, form: fromSuite(s, true) })} />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      <SuiteDialog state={editing} onClose={() => setEditing(null)} onSaved={refresh} />
+
+      <AlertDialog open={Boolean(deleting)} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{deleting?.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>The suite is removed. Past runs stay in your test history.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete suite</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function SuiteCard({
+  suite: s,
+  lastRun,
+  onRun,
+  onEdit,
+  onDuplicate,
+  onDelete,
+  onToggle,
+}: {
+  suite: TestSuiteRow;
+  lastRun: TestRunRow | undefined;
+  onRun: () => void;
+  onEdit?: () => void;
+  onDuplicate: () => void;
+  onDelete?: () => void;
+  onToggle?: (v: boolean) => void;
+}) {
+  return (
+    <Panel className={cn("flex flex-col p-5 transition-colors hover:border-primary/40", !s.enabled && "opacity-70")}>
+      <div className="flex items-start gap-3">
+        <SiteMark url={s.target_url} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="truncate font-semibold">{s.name}</h3>
+            {s.is_sample && <Badge variant="outline" className="shrink-0 border-primary/30 text-[10px] text-primary-glow">Sample</Badge>}
+          </div>
+          <a href={s.target_url} target="_blank" rel="noreferrer" className="block truncate font-mono text-xs text-muted-foreground hover:text-foreground">
+            {displayHost(s.target_url)}
+          </a>
+        </div>
+        {onToggle && <Switch checked={s.enabled} onCheckedChange={onToggle} aria-label={s.enabled ? "Pause suite" : "Enable suite"} />}
+      </div>
+
+      {s.description && <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">{s.description}</p>}
+
+      <div className="mt-4 flex flex-wrap gap-1.5 text-xs">
+        <Badge variant="secondary" className="font-normal">{PROFILES[s.profile].label}</Badge>
+        <Badge variant="secondary" className="gap-1 font-normal"><Globe className="size-3" />{s.browsers.map((b) => BROWSERS[b]?.label ?? b).join(", ")}</Badge>
+        <Badge variant="secondary" className="gap-1 font-normal"><Monitor className="size-3" />{s.devices.map((d) => DEVICES[d]?.label ?? d).join(", ")}</Badge>
+        <Badge variant="secondary" className="gap-1 font-normal"><CalendarClock className="size-3" />{SCHEDULE_LABEL[s.schedule]}</Badge>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between rounded-lg border border-border/70 bg-surface px-3 py-2 text-xs">
+        {lastRun ? (
+          <>
+            <Link to="/runs/$runId" params={{ runId: lastRun.id }} className="flex items-center gap-2 hover:underline">
+              <StatusBadge status={lastRun.status} />
+              <span className="text-muted-foreground">{fmtAgo(lastRun.created_at)}</span>
+            </Link>
+            <span className={cn("font-mono font-semibold", scoreTone(lastRun.score))}>{lastRun.score ?? "—"}</span>
+          </>
+        ) : (
+          <span className="text-muted-foreground">Not run yet</span>
+        )}
+      </div>
+
+      <div className="mt-4 flex items-center gap-2 pt-1">
+        <Button size="sm" variant="glow" className="flex-1" onClick={onRun} disabled={!s.enabled}>
+          <Play /> Run now
+        </Button>
+        {onEdit && <Button size="icon" variant="outline" className="size-8" onClick={onEdit} aria-label="Edit suite"><Pencil /></Button>}
+        <Button size="icon" variant="outline" className="size-8" onClick={onDuplicate} aria-label="Duplicate suite"><Copy /></Button>
+        {onDelete && <Button size="icon" variant="outline" className="size-8 hover:text-destructive" onClick={onDelete} aria-label="Delete suite"><Trash2 /></Button>}
+      </div>
+    </Panel>
+  );
+}
+
+function SuiteDialog({ state, onClose, onSaved }: { state: { id: string | null; form: SuiteInput } | null; onClose: () => void; onSaved: () => Promise<unknown> }) {
+  return (
+    <Dialog open={Boolean(state)} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        {state && <SuiteForm key={state.id ?? "new"} id={state.id} initial={state.form} onClose={onClose} onSaved={onSaved} />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SuiteForm({ id, initial, onClose, onSaved }: { id: string | null; initial: SuiteInput; onClose: () => void; onSaved: () => Promise<unknown> }) {
+  const [form, setForm] = useState<SuiteInput>(initial);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const set = <K extends keyof SuiteInput>(k: K, v: SuiteInput[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const toggleIn = <T extends string>(list: T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const name = form.name.trim();
+    if (!name) { toast.error("Give the suite a name."); return; }
+    const v = validateUrl(form.target_url);
+    if (!v.ok) {
+      setUrlError(v.error);
+      return;
+    }
+    if (form.browsers.length === 0) { toast.error("Pick at least one browser."); return; }
+    if (form.devices.length === 0) { toast.error("Pick at least one device."); return; }
+    setBusy(true);
+    try {
+      const payload = { ...form, name, target_url: v.url, description: form.description?.trim() || null };
+      if (id) await updateSuite(id, payload);
+      else await createSuite(payload);
+      await onSaved();
+      toast.success(id ? "Suite updated" : "Suite created");
+      onClose();
+    } catch (err) {
+      toast.error("Couldn't save suite", { description: err instanceof Error ? err.message : undefined });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="grid gap-4">
+      <DialogHeader>
+        <DialogTitle>{id ? "Edit suite" : "New suite"}</DialogTitle>
+        <DialogDescription>Runs from a suite use its first selected browser and device.</DialogDescription>
+      </DialogHeader>
+      <div className="grid gap-1.5">
+        <Label htmlFor="s-name">Name</Label>
+        <Input id="s-name" value={form.name} maxLength={80} onChange={(e) => set("name", e.target.value)} placeholder="Marketing site — release check" />
+      </div>
+      <div className="grid gap-1.5">
+        <Label htmlFor="s-url">Website URL</Label>
+        <Input id="s-url" value={form.target_url} onChange={(e) => { set("target_url", e.target.value); setUrlError(null); }} placeholder="example.com" aria-invalid={Boolean(urlError)} className={cn("font-mono", urlError && "border-destructive")} />
+        {urlError && <p className="text-xs text-destructive">{urlError}</p>}
+      </div>
+      <div className="grid gap-1.5">
+        <Label htmlFor="s-desc">Description <span className="text-muted-foreground">(optional)</span></Label>
+        <Textarea id="s-desc" rows={2} maxLength={300} value={form.description ?? ""} onChange={(e) => set("description", e.target.value)} />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label>Profile</Label>
+          <Select value={form.profile} onValueChange={(v) => set("profile", v as TestProfile)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{PROFILE_IDS.map((p) => <SelectItem key={p} value={p}>{PROFILES[p].label}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-1.5">
+          <Label>Schedule</Label>
+          <Select value={form.schedule} onValueChange={(v) => set("schedule", v as TestSuiteRow["schedule"])}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(["manual", "daily", "weekly"] as const).map((s) => <SelectItem key={s} value={s}>{SCHEDULE_LABEL[s]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      {form.schedule !== "manual" && (
+        <p className="-mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+          Scheduling is saved but not executed in this demo — run suites manually with “Run now”.
+        </p>
+      )}
+      <fieldset className="grid gap-2">
+        <legend className="mb-1 text-sm font-medium">Browsers</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {BROWSER_IDS.map((b) => (
+            <label key={b} className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm has-[:checked]:border-primary/50 has-[:checked]:bg-primary/8">
+              <Checkbox checked={form.browsers.includes(b)} onCheckedChange={() => set("browsers", toggleIn<BrowserId>(form.browsers, b))} />
+              {BROWSERS[b].label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset className="grid gap-2">
+        <legend className="mb-1 text-sm font-medium">Devices</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {DEVICE_IDS.map((d) => (
+            <label key={d} className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm has-[:checked]:border-primary/50 has-[:checked]:bg-primary/8">
+              <Checkbox checked={form.devices.includes(d)} onCheckedChange={() => set("devices", toggleIn<DeviceId>(form.devices, d))} />
+              {DEVICES[d].label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <DialogFooter className="gap-2 sm:gap-0">
+        <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+        <Button type="submit" variant="glow" disabled={busy}>{busy && <Loader2 className="animate-spin" />}{id ? "Save changes" : "Create suite"}</Button>
+      </DialogFooter>
+    </form>
+  );
 }
