@@ -28,3 +28,7 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+- Pure, testable logic (URL validation, scoring, history filtering) lives in `src/lib/`, never exported from route files — route modules are code-split and can pull in the backend client.
+- Every check carries `source: "measured" | "simulated"`; anything not derived from the live page fetch must be labelled simulated in the UI. Never imply real browser or AI testing when those providers are not connected.

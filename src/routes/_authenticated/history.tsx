@@ -10,21 +10,15 @@ import { EmptyState, PageHeader, Panel } from "@/components/lab/common";
 import { RunsTable } from "@/components/lab/runs-table";
 import { runsQuery } from "@/lib/lab-data";
 import { PROFILES, PROFILE_IDS } from "@/lib/testing/constants";
-import type { RunStatus, TestProfile, TestRunRow } from "@/lib/testing/types";
+import type { TestProfile } from "@/lib/testing/types";
+import { HISTORY_RANGES, HISTORY_SOURCES, HISTORY_STATUSES, filterRuns, type HistoryFilters } from "@/lib/history-filter";
 
-const STATUSES = ["all", "passed", "warning", "failed"] as const;
-const RANGES = { all: "All time", "24h": "Last 24 hours", "7d": "Last 7 days", "30d": "Last 30 days" } as const;
-const SOURCES = { all: "All runs", mine: "My runs", sample: "Sample runs" } as const;
+const STATUSES = HISTORY_STATUSES;
+const RANGES = HISTORY_RANGES;
+const SOURCES = HISTORY_SOURCES;
 const PAGE_SIZE = 15;
 
-type HistorySearch = {
-  q?: string | undefined;
-  status?: (typeof STATUSES)[number] | undefined;
-  profile?: TestProfile | "all" | undefined;
-  range?: keyof typeof RANGES | undefined;
-  source?: keyof typeof SOURCES | undefined;
-  page?: number | undefined;
-};
+type HistorySearch = HistoryFilters;
 
 export const Route = createFileRoute("/_authenticated/history")({
   validateSearch: (s: Record<string, unknown>): HistorySearch => {
@@ -53,21 +47,6 @@ export const Route = createFileRoute("/_authenticated/history")({
   }),
   component: HistoryPage,
 });
-
-/** Pure filter used by the page (exported for tests). */
-export function filterRuns(runs: TestRunRow[], f: HistorySearch, now = Date.now()): TestRunRow[] {
-  const q = f.q?.trim().toLowerCase();
-  const cutoff = f.range === "24h" ? now - 864e5 : f.range === "7d" ? now - 7 * 864e5 : f.range === "30d" ? now - 30 * 864e5 : null;
-  return runs.filter((r) => {
-    if (q && !(r.url.toLowerCase().includes(q) || (r.instructions ?? "").toLowerCase().includes(q) || (r.summary ?? "").toLowerCase().includes(q))) return false;
-    if (f.status && f.status !== "all" && r.status !== (f.status as RunStatus)) return false;
-    if (f.profile && f.profile !== "all" && r.profile !== f.profile) return false;
-    if (cutoff && new Date(r.created_at).getTime() < cutoff) return false;
-    if (f.source === "mine" && r.is_sample) return false;
-    if (f.source === "sample" && !r.is_sample) return false;
-    return true;
-  });
-}
 
 function HistoryPage() {
   const search = Route.useSearch();

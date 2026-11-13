@@ -89,7 +89,7 @@ Configure email/password Auth and the OAuth providers you want to enable in Supa
 ## Verification commands
 
 ```bash
-bun run test       # unit and routing tests
+bun run test       # routing, URL validation, scoring, and history filter tests
 bun run typecheck  # strict TypeScript check
 bun run build      # production Vite/TanStack Start build
 bun run lint       # ESLint
@@ -97,6 +97,8 @@ bun run preview    # preview a production build locally
 ```
 
 GitHub Actions runs tests, typecheck, and build on pushes to `main` and on pull requests.
+
+Automated coverage includes route matching, URL/SSRF validation, weighted scoring, deterministic simulated results, and combined history filters. A signed-in browser click-through remains unverified because no test account was available; no production test account was created.
 
 ## Execution model and limitations
 
